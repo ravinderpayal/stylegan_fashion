@@ -21,7 +21,9 @@ def requires_grad(model, flag=True):
     for p in model.parameters():
         p.requires_grad = flag
 
-
+"""
+    Accumulate is used for decaying
+"""
 def accumulate(model1, model2, decay=0.999):
     par1 = dict(model1.named_parameters())
     par2 = dict(model2.named_parameters())
@@ -351,6 +353,8 @@ if __name__ == '__main__':
     accumulate(g_running, generator.module, 0) # model accumulation ????
 
     if args.ckpt is not None:
+        ## 
+        print("it's reaching here")
         ckpt = torch.load(args.ckpt)
 
         generator.module.load_state_dict(ckpt['generator'])
