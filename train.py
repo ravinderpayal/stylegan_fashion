@@ -28,6 +28,7 @@ def accumulate(model1, model2, decay=0.999):
 
     for k in par1.keys():
         par1[k].data.mul_(decay).add_(1 - decay, par2[k].data)
+        # Model1Params.data.mul_
 
 
 def sample_data(dataset, batch_size, image_size=4):
@@ -44,17 +45,26 @@ def adjust_lr(optimizer, lr):
 
 
 def train(args, dataset, generator, discriminator):
-    step = int(math.log2(args.init_size)) - 2
-    resolution = 4 * 2 ** step
+    """
+        log2 of 4,8,16,32...1024 is 2, 3, 4, 5...10
+    """
+    step = int(math.log2(args.init_size)) - 2 #init_size initial image size i.e. 8
+
+    """
+        step will be natural number>=1 i.e. 1, 2, 3, 4, 5....
+    """
+    resolution = 4 * (2 ** step)
+
     loader = sample_data(
         dataset, args.batch.get(resolution, args.batch_default), resolution
     )
+
     data_loader = iter(loader)
 
     adjust_lr(g_optimizer, args.lr.get(resolution, 0.001))
     adjust_lr(d_optimizer, args.lr.get(resolution, 0.001))
 
-    pbar = tqdm(range(3_000_000))
+    pbar = tqdm(range(3_000_000)) # progress bar based on tqdm lib
 
     requires_grad(generator, False)
     requires_grad(discriminator, True)
@@ -66,7 +76,7 @@ def train(args, dataset, generator, discriminator):
     alpha = 0
     used_sample = 0
 
-    max_step = int(math.log2(args.max_size)) - 2
+    max_step = int(math.log2(args.max_size)) - 2 # i.e. (log2 of 1024) -2= 10 -2 = 8
     final_progress = False
 
     for i in pbar:
@@ -84,7 +94,7 @@ def train(args, dataset, generator, discriminator):
             if step > max_step:
                 step = max_step
                 final_progress = True
-                ckpt_step = step + 1
+                ckpt_step = ckpt_step + 1
 
             else:
                 alpha = 0
@@ -94,8 +104,9 @@ def train(args, dataset, generator, discriminator):
 
             loader = sample_data(
                 dataset, args.batch.get(resolution, args.batch_default), resolution
-            )
-            data_loader = iter(loader)
+            )  ### reloading the data from begining
+
+            data_loader = iter(loader) ## new epoch start here
 
             torch.save(
                 {
@@ -112,7 +123,7 @@ def train(args, dataset, generator, discriminator):
             adjust_lr(d_optimizer, args.lr.get(resolution, 0.001))
 
         try:
-            real_image = next(data_loader)
+            real_image = next(data_loader) # a batch of count = batch_arg line number = ??
 
         except (OSError, StopIteration):
             data_loader = iter(loader)
@@ -123,10 +134,14 @@ def train(args, dataset, generator, discriminator):
         b_size = real_image.size(0)
         real_image = real_image.cuda()
 
+        #
+        #
+        #  Area of concern.....back propagation happening ahead for descriminator
+        #
         if args.loss == 'wgan-gp':
             real_predict = discriminator(real_image, step=step, alpha=alpha)
             real_predict = real_predict.mean() - 0.001 * (real_predict ** 2).mean()
-            (-real_predict).backward()
+            (-real_predict).backward() # back propagation 
 
         elif args.loss == 'r1':
             real_image.requires_grad = True
@@ -145,6 +160,10 @@ def train(args, dataset, generator, discriminator):
             if i%10 == 0:
                 grad_loss_val = grad_penalty.item()
 
+
+        """
+            Noise vector generation ahead using code_size
+        """
         if args.mixing and random.random() < 0.9:
             gen_in11, gen_in12, gen_in21, gen_in22 = torch.randn(
                 4, b_size, code_size, device='cuda'
@@ -193,12 +212,12 @@ def train(args, dataset, generator, discriminator):
         if (i + 1) % n_critic == 0:
             generator.zero_grad()
 
-            requires_grad(generator, True)
-            requires_grad(discriminator, False)
+            requires_grad(generator, True) # setting that generator parameter's gradient will be calculated so prepare the fields for future operations
+            requires_grad(discriminator, False) # ulta uppr walle mc ka
 
-            fake_image = generator(gen_in2, step=step, alpha=alpha)
+            fake_image = generator(gen_in2, step=step, alpha=alpha) # first run / sayad try ball
 
-            predict = discriminator(fake_image, step=step, alpha=alpha)
+            predict = discriminator(fake_image, step=step, alpha=alpha) # try ball descriminator bhai ko bhi
 
             if args.loss == 'wgan-gp':
                 loss = -predict.mean()
@@ -216,10 +235,13 @@ def train(args, dataset, generator, discriminator):
             requires_grad(generator, False)
             requires_grad(discriminator, True)
 
+        """
+            Not much relevant start
+        """
         if (i + 1) % 100 == 0:
             images = []
 
-            gen_i, gen_j = args.gen_sample.get(resolution, (10, 5))
+            gen_i, gen_j = args.gen_sample.get(resolution, (10, 5)) # gen_sample is a dictionary
 
             with torch.no_grad():
                 for _ in range(gen_i):
@@ -227,7 +249,7 @@ def train(args, dataset, generator, discriminator):
                         g_running(
                             torch.randn(gen_j, code_size).cuda(), step=step, alpha=alpha
                         ).data.cpu()
-                    )
+                    ) # which g_running??
 
             utils.save_image(
                 torch.cat(images, 0),
@@ -236,14 +258,22 @@ def train(args, dataset, generator, discriminator):
                 normalize=True,
                 range=(-1, 1),
             )
+        """
+            Not much relevant end
+        """
 
+
+        """
+            Very relevant but not sure from it's getting g_running
+        """
         if (i + 1) % 10000 == 0:
             torch.save(
                 g_running.state_dict(), f'checkpoint/{str(i + 1).zfill(6)}.model'
             )
 
         state_msg = (
-            f'Size: {4 * 2 ** step}; G: {gen_loss_val:.3f}; D: {disc_loss_val:.3f};'
+            f'Used sample: {used_sample}; Iteration: {i};'
+            f' Size: {4 * 2 ** step}; G: {gen_loss_val:.3f}; D: {disc_loss_val:.3f};'
             f' Grad: {grad_loss_val:.3f}; Alpha: {alpha:.5f}'
         )
 
@@ -251,34 +281,40 @@ def train(args, dataset, generator, discriminator):
 
 
 if __name__ == '__main__':
-    code_size = 512
-    batch_size = 16
-    n_critic = 1
+    code_size = 512  # it's noise vector
+    batch_size = 16 # machine learning wala batch size
+    n_critic = 1  # ????
 
     parser = argparse.ArgumentParser(description='Progressive Growing of GANs')
 
     parser.add_argument('path', type=str, help='path of specified dataset')
+
     parser.add_argument(
         '--phase',
         type=int,
         default=600_000,
         help='number of samples used for each training phases',
     )
+
     parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
     parser.add_argument('--sched', action='store_true', help='use lr scheduling')
     parser.add_argument('--init_size', default=8, type=int, help='initial image size')
     parser.add_argument('--max_size', default=1024, type=int, help='max image size')
+
     parser.add_argument(
         '--ckpt', default=None, type=str, help='load from previous checkpoints'
-    )
+    ) # but jo apna hrr phase ke baad bnn rha hai ussko...hrr iteration walla nhin
+
     parser.add_argument(
         '--no_from_rgb_activate',
         action='store_true',
         help='use activate in from_rgb (original implementation)',
     )
+
     parser.add_argument(
         '--mixing', action='store_true', help='use mixing regularization'
     )
+
     parser.add_argument(
         '--loss',
         type=str,
@@ -289,16 +325,20 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    generator = nn.DataParallel(StyledGenerator(code_size)).cuda()
+    generator = nn.DataParallel(StyledGenerator(code_size)).cuda() ## mostly it's making the potential operations concurrent
+    ## The batch size should be larger than the number of GPUs used.
+
     discriminator = nn.DataParallel(
         Discriminator(from_rgb_activate=not args.no_from_rgb_activate)
-    ).cuda()
-    g_running = StyledGenerator(code_size).cuda()
+    ).cuda() ## ditto same bkchodi
+
+    g_running = StyledGenerator(code_size).cuda()  # g_running is generator_running
     g_running.train(False)
 
     g_optimizer = optim.Adam(
         generator.module.generator.parameters(), lr=args.lr, betas=(0.0, 0.99)
-    )
+    ) # generator loss function / learning rate related stuff
+
     g_optimizer.add_param_group(
         {
             'params': generator.module.style.parameters(),
@@ -308,7 +348,7 @@ if __name__ == '__main__':
     )
     d_optimizer = optim.Adam(discriminator.parameters(), lr=args.lr, betas=(0.0, 0.99))
 
-    accumulate(g_running, generator.module, 0)
+    accumulate(g_running, generator.module, 0) # model accumulation ????
 
     if args.ckpt is not None:
         ckpt = torch.load(args.ckpt)
@@ -319,6 +359,9 @@ if __name__ == '__main__':
         g_optimizer.load_state_dict(ckpt['g_optimizer'])
         d_optimizer.load_state_dict(ckpt['d_optimizer'])
 
+    """
+     Data augmentation is happening here
+    """
     transform = transforms.Compose(
         [
             transforms.RandomHorizontalFlip(),
@@ -330,7 +373,15 @@ if __name__ == '__main__':
     dataset = MultiResolutionDataset(args.path, transform)
 
     if args.sched:
+        """
+            Learning rate for each training phase post 128
+        """
+        #### might be a reason behind crash
         args.lr = {128: 0.0015, 256: 0.002, 512: 0.003, 1024: 0.003}
+
+        """
+            Batch size for each training phase
+        """
         args.batch = {4: 512, 8: 256, 16: 128, 32: 64, 64: 32, 128: 32, 256: 32}
 
     else:

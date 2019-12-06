@@ -21,7 +21,7 @@ class MultiResolutionDataset(Dataset):
 
         with self.env.begin(write=False) as txn:
             self.length = int(txn.get('length'.encode('utf-8')).decode('utf-8'))
-
+            print("Dataset size is %d" % self.length)
         self.resolution = resolution
         self.transform = transform
 

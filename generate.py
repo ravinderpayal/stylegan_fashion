@@ -56,7 +56,10 @@ def style_mixing(generator, step, mean_style, n_source, n_target, device):
 
     for i in range(n_target):
         image = generator(
-            [target_code[i].unsqueeze(0).repeat(n_source, 1), source_code],
+            [
+                target_code[i].unsqueeze(0).repeat(n_source, 1),
+                source_code
+            ],
             step=step,
             alpha=alpha,
             mean_style=mean_style,
