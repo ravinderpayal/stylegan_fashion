@@ -118,7 +118,7 @@ def train(args, dataset, generator, discriminator):
                     'd_optimizer': d_optimizer.state_dict(),
                     'g_running': g_running.state_dict(),
                 },
-                f'checkpoint/train_step-{ckpt_step}.model',
+                f'checkpoint/train_step-{ckpt_step}.model'
             )
 
             adjust_lr(g_optimizer, args.lr.get(resolution, 0.001))
