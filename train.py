@@ -330,7 +330,7 @@ if __name__ == '__main__':
 
     discriminator = nn.DataParallel(
         Discriminator(from_rgb_activate=not args.no_from_rgb_activate)
-    ).cuda() ## ditto same bkchodi
+    ).cuda() ## ditto same 
 
     g_running = StyledGenerator(code_size).cuda()  # g_running is generator_running
     g_running.train(False)
