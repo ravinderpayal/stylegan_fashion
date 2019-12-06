@@ -54,7 +54,7 @@ def prepare(transaction, dataset, n_worker, sizes=(8, 16, 32, 64, 128, 256, 512,
             total += 1
 
         transaction.put('length'.encode('utf-8'), str(total).encode('utf-8'))
-
+    print("Total data: %d" % total)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
