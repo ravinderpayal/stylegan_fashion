@@ -13,6 +13,19 @@ from torch.autograd import Variable, grad
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms, utils
 
+import os
+import time
+
+import torch_xla
+import torch_xla.core.xla_model as xm
+import torch_xla.debug.metrics as met
+import torch_xla.distributed.parallel_loader as pl
+import torch_xla.distributed.xla_multiprocessing as xmp
+import torch_xla.utils.utils as xu
+
+
+
+
 from dataset import MultiResolutionDataset
 from model import StyledGenerator, Discriminator
 
@@ -134,7 +147,7 @@ def train(args, dataset, generator, discriminator):
         used_sample += real_image.shape[0]
 
         b_size = real_image.size(0)
-        real_image = real_image.cuda()
+        real_image = real_image.to(device)
 
         #
         #
@@ -168,13 +181,13 @@ def train(args, dataset, generator, discriminator):
         """
         if args.mixing and random.random() < 0.9:
             gen_in11, gen_in12, gen_in21, gen_in22 = torch.randn(
-                4, b_size, code_size, device='cuda'
-            ).chunk(4, 0)
+                4, b_size, code_size
+            ).to(device).chunk(4, 0)
             gen_in1 = [gen_in11.squeeze(0), gen_in12.squeeze(0)]
             gen_in2 = [gen_in21.squeeze(0), gen_in22.squeeze(0)]
 
         else:
-            gen_in1, gen_in2 = torch.randn(2, b_size, code_size, device='cuda').chunk(
+            gen_in1, gen_in2 = torch.randn(2, b_size, code_size).to(device).chunk(
                 2, 0
             )
             gen_in1 = gen_in1.squeeze(0)
@@ -187,7 +200,7 @@ def train(args, dataset, generator, discriminator):
             fake_predict = fake_predict.mean()
             fake_predict.backward()
 
-            eps = torch.rand(b_size, 1, 1, 1).cuda()
+            eps = torch.rand(b_size, 1, 1, 1).to(device)
             x_hat = eps * real_image.data + (1 - eps) * fake_image.data
             x_hat.requires_grad = True
             hat_predict = discriminator(x_hat, step=step, alpha=alpha)
@@ -249,7 +262,7 @@ def train(args, dataset, generator, discriminator):
                 for _ in range(gen_i):
                     images.append(
                         g_running(
-                            torch.randn(gen_j, code_size).cuda(), step=step, alpha=alpha
+                            torch.randn(gen_j, code_size).to(device), step=step, alpha=alpha
                         ).data.cpu()
                     ) # which g_running??
 
@@ -325,16 +338,18 @@ if __name__ == '__main__':
         help='class of gan loss',
     )
 
+    device = xm.xla_device()
+
     args = parser.parse_args()
 
-    generator = nn.DataParallel(StyledGenerator(code_size)).cuda() ## mostly it's making the potential operations concurrent
+    generator = nn.DataParallel(StyledGenerator(code_size)).to(device) ## mostly it's making the potential operations concurrent
     ## The batch size should be larger than the number of GPUs used.
 
     discriminator = nn.DataParallel(
         Discriminator(from_rgb_activate=not args.no_from_rgb_activate)
-    ).cuda() ## ditto same 
+    ).to(device) ## ditto same 
 
-    g_running = StyledGenerator(code_size).cuda()  # g_running is generator_running
+    g_running = StyledGenerator(code_size).to(device)  # g_running is generator_running
     g_running.train(False)
 
     g_optimizer = optim.Adam(
