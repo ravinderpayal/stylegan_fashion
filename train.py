@@ -394,6 +394,9 @@ if __name__ == '__main__':
 
     args.gen_sample = {512: (8, 4), 1024: (4, 2)}
 
-    args.batch_default = 32
+    if args.init_size == 256:
+        args.batch_default = 16
+    else:
+        args.batch_default = 32
 
     train(args, dataset, generator, discriminator)
